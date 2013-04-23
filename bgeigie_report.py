@@ -84,6 +84,7 @@ CPMfactor = 334.0
 maxDelayBetweenReadings = 2*60*60 # 2 hour is suspect (split)
 maxDistanceBetweenReadings = 200*binSize # 20 km is suspect
 debugMode = False
+maxDataColumns = 15 # only process the 15 first columns from CSV
 
 # Globals
 global logfile
@@ -311,11 +312,11 @@ def splitLogFile(filename, timeSplit, distanceSplit, worldMode, ignoreDelay, ign
         pass
 
     # Crop any extra columns
-    data = data[:15]
+    data = data[:maxDataColumns]
 
     # Check for bGeigieMini or bGeigie
     if data[0] == "$BMRDD" or data[0] == "$BGRDD" or data[0] == "$BNRDD":
-      if len(data) != 15 or data[6] != "A":
+      if len(data) != maxDataColumns or data[6] != "A":
          split.write("%s" % line)
          continue
 
@@ -443,7 +444,7 @@ def loadLogFile(filename, enableuSv, worldMode, ignoreDelay, ignoreDistance):
       continue
 
     # Crop any extra columns
-    data = data[:15]
+    data = data[:maxDataColumns]
 
     # Check for bGeigieMini or bGeigie
     if data[0] == "$BMRDD" or data[0] == "$BGRDD" or data[0] == "$BNRDD":
@@ -451,7 +452,7 @@ def loadLogFile(filename, enableuSv, worldMode, ignoreDelay, ignoreDistance):
          if data[0] == "$BMRDD": bgeigieModel = "bGeigieMini"
          elif data[0] == "$BGRDD": bgeigieModel = "bGeigieClassic"
          elif data[0] == "$BNRDD": bgeigieModel = "bGeigieNano"
-      if len(data) != 15 or data[6] != "A" or data[12] != "A":
+      if len(data) != maxDataColumns or data[6] != "A" or data[12] != "A":
          skippedLines["U"].append(lineCounter)
          continue
 
