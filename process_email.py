@@ -271,9 +271,9 @@ class Gmail():
      self.recipients = recipients
      self.files = files
 
-     filename = self.files.keys()
-     filename.sort()
-     for report in self.files:
+     filenames = self.files.keys()
+     filenames.sort()
+     for report in filenames:
        try:
          summary = self.files[report]["message"]
          # Multipart emails
