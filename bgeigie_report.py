@@ -10,6 +10,7 @@
 
 # system libraries
 import os, sys, time, traceback, operator
+from time import gmtime, strftime
 from datetime import datetime, timedelta
 from optparse import OptionParser
 import glob
@@ -42,6 +43,14 @@ RAD_TO_DEG = 180/pi
 # Tiles support
 from PIL import Image, ImageDraw
 import urllib
+
+# Mongodb
+try:
+  import pymongo
+  from collections import OrderedDict
+  dbSupport = True
+except:
+  dbSupport = False
 
 # Reportlab
 import time
@@ -85,6 +94,7 @@ maxDelayBetweenReadings = 2*60*60 # 2 hour is suspect (split)
 maxDistanceBetweenReadings = 200*binSize # 20 km is suspect
 debugMode = False
 maxDataColumns = 15 # only process the 15 first columns from CSV
+
 
 # Globals
 global logfile
@@ -389,7 +399,7 @@ def splitLogFile(filename, timeSplit, distanceSplit, worldMode, ignoreDelay, ign
 # Load bGeigie raw log file
 # -----------------------------------------------------------------------------
 @trace(debugMode)
-def loadLogFile(filename, enableuSv, worldMode, ignoreDelay, ignoreDistance):
+def loadLogFile(filename, enableuSv, worldMode, ignoreDelay, ignoreDistance, tag):
   # bGeigie Log format
   # header + id + time + cpm + cp5s + totc + rnStatus + latitude + northsouthindicator + longitude + eastwestindicator + altitude + gpsStatus + dop + quality
 
@@ -422,6 +432,13 @@ def loadLogFile(filename, enableuSv, worldMode, ignoreDelay, ignoreDistance):
   # T Time issue
   # D Distance issue
   # O Out of Japan
+
+  # Connect to database
+  if dbSupport:
+    connection = pymongo.Connection()
+    db = connection.test
+    locations = db.locations
+    locations.ensure_index('date', unique=True)
 
   for line in lines:
     # Extract items (comma separated)
@@ -529,19 +546,30 @@ def loadLogFile(filename, enableuSv, worldMode, ignoreDelay, ignoreDistance):
       skippedLines["U"].append(lineCounter)
       continue
 
+    # Check if altitude is valid, clip if necessary
+    if (baltitude < 0):
+      baltitude = 0
+    elif (baltitude > JP_alt_max) and not worldMode:
+      baltitude = JP_alt_max
+
+    # Insert result to database
+    if dbSupport:
+      locations.insert(
+        {'loc': [blat, blon],
+        'altitude': baltitude,
+        'tag': tag,
+        'log': os.path.basename(filename),
+        'drive' : s_id,
+        'date' : bdate,
+        'cpm': bcpm})
+
     # Store the results
     resultDriveId.append(s_id)
     resultDate.append(bdate)
     resultReading.append(bcpm)
     resultLat.append(blat)
     resultLon.append(blon)
-    # Check if altitude is valid, clip if necessary
-    if (baltitude < 0):
-      resultAltitude.append(0)
-    elif (baltitude > JP_alt_max) and not worldMode:
-      resultAltitude.append(JP_alt_max)
-    else:
-      resultAltitude.append(baltitude)
+    resultAltitude.append(baltitude)
 
   resultLat = np.array(resultLat)
   resultLon = np.array(resultLon)
@@ -556,6 +584,54 @@ def loadLogFile(filename, enableuSv, worldMode, ignoreDelay, ignoreDistance):
     model = ""
 
   print "[LOG] Lines skipped =",skippedLines
+
+  # Close database connection
+  if dbSupport:
+    locations.create_index([('loc', pymongo.GEO2D)])
+    locations.create_index([('loc', pymongo.GEOHAYSTACK), ("type", pymongo.ASCENDING)], bucket_size=1)
+    connection.disconnect()
+
+  return (resultDriveId, resultDate, resultLat, resultLon, resultReading, resultAltitude, totalDose, skippedLines, model)
+
+# -----------------------------------------------------------------------------
+# Load bGeigie database data
+# -----------------------------------------------------------------------------
+@trace(debugMode)
+def loadDbData(model, enableuSv, logs):
+  # bGeigie Log format
+  # header + id + time + cpm + cp5s + totc + rnStatus + latitude + northsouthindicator + longitude + eastwestindicator + altitude + gpsStatus + dop + quality
+
+  print "Generating summary report from", logs
+
+  resultDriveId = []
+  resultDate = []
+  resultReading = []
+  resultLat = []
+  resultLon = []
+  resultAltitude = []
+  totalDose = 0
+  skippedLines = {"U": [], "T": [], "D": [], "O": []}
+
+  # db connection
+  connection = pymongo.Connection()
+  db = connection.test
+  locations = db.locations
+  cursors = locations.find({'$or' : logs})
+
+  for data in cursors:
+    # Store the results
+    resultDriveId.append(data['drive'])
+    resultDate.append(data['date'])
+    resultReading.append(data['cpm'])
+    resultLat.append(data['loc'][0])
+    resultLon.append(data['loc'][1])
+    resultAltitude.append(data['altitude'])
+
+  resultLat = np.array(resultLat)
+  resultLon = np.array(resultLon)
+  resultReading = np.array(resultReading)
+  resultAltitude = np.array(resultAltitude)
+  if enableuSv: totalDose /= CPMfactor
 
   return (resultDriveId, resultDate, resultLat, resultLon, resultReading, resultAltitude, totalDose, skippedLines, model)
 
@@ -1434,9 +1510,12 @@ def generateCSVreport(mapName, data):
 # -----------------------------------------------------------------------------
 @trace(debugMode)
 def processFiles(fileList, options):
-    language, charset, pdfEnabled, kmlEnabled, gpxEnabled, csvEnabled, worldMode, ignoreDelay, ignoreDistance = (
+    language, charset, pdfEnabled, kmlEnabled, gpxEnabled, csvEnabled, worldMode, ignoreDelay, ignoreDistance, summary = (
           options.language, options.charset, options.pdf, options.kml,
-          options.gpx, options.csv, options.world, options.time, options.distance)
+          options.gpx, options.csv, options.world, options.time, options.distance, options.summary)
+
+    tag = str(strftime("%Y-%m-%dT%H:%M:%SZ", gmtime()))
+    logs = []
 
     # Split drives if necessary
     newFiles = []
@@ -1453,11 +1532,13 @@ def processFiles(fileList, options):
       logfile = os.path.basename(f)
       logName = os.path.splitext(f)[0]
 
+      logs.append({'log': logfile})
+
       attachments = []
       message = ""
       try:
         # Load data log
-        data = loadLogFile(f, True, worldMode, ignoreDelay, ignoreDistance)
+        data = loadLogFile(f, True, worldMode, ignoreDelay, ignoreDistance, tag)
         if not len(data[0]):
           print "No valid data available."
           continue
@@ -1465,7 +1546,7 @@ def processFiles(fileList, options):
         if kmlEnabled:
           attachments.append(generateKMLreport(logName, data, useZipExtension = True))
         if gpxEnabled:
-          attachments.append(generateGPXreport(logName, data, trackMode=False))
+          attachments.append(generateGPXreport(logName, data, trackMode = False))
         if csvEnabled:
           attachments.append(generateCSVreport(logName, data))
 
@@ -1493,6 +1574,45 @@ def processFiles(fileList, options):
       # Prepare attachment list
       if message != "":
          reports[f] = {"message": message, "attachments": attachments}
+
+    # Summary report
+    if dbSupport and summary:
+      logfile = "SUMMARY.LOG"
+      logName = os.path.splitext(logfile)[0]
+      attachments = []
+      message = ""
+      while True:
+        # Load data log
+        data = loadDbData("", True, logs)
+        if not len(data[0]):
+          print "No valid data available."
+          break
+
+        if kmlEnabled:
+          attachments.append(generateKMLreport(logName, data, useZipExtension = True))
+        if gpxEnabled:
+          attachments.append(generateGPXreport(logName, data, trackMode = False))
+        if csvEnabled:
+          attachments.append(generateCSVreport(logName, data))
+
+        # Draw map
+        mapInfo = drawMap(logName, data, language, False)
+        if len(mapInfo) == 0:
+           # Wrong file, skip it
+           break
+        size, legend, statisticTable, skipped = mapInfo
+
+        # Generate reports
+        if pdfEnabled:
+          attachments.append(generatePDFReport(logName, language, size, legend, statisticTable))
+
+        message = generateHTMLReport(logName, language, statisticTable, skipped, charset)
+        processStatus.append((logfile, sum([len(skipped[e]) for e in skipped.keys()])))
+        break
+
+      # Prepare attachment list
+      if message != "":
+         reports[logfile] = {"message": message, "attachments": attachments}
 
     # Display a status summary
     print '='*60
@@ -1534,6 +1654,9 @@ if __name__ == '__main__':
     parser.add_option("-d", "--distance",
                       action="store_true", dest="distance", default=False,
                       help="disable distance constrains")
+    parser.add_option("-s", "--summary",
+                      action="store_true", dest="summary", default=False,
+                      help="generate a summary report")
 
     (options, args) = parser.parse_args()
 
@@ -1542,6 +1665,3 @@ if __name__ == '__main__':
 
     files = glob.glob(args[0])
     processFiles(files, options)
-
-
-

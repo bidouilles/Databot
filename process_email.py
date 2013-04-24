@@ -37,7 +37,7 @@ attachment_extensions = [".LOG", ".TXT"]
 # -----------------------------------------------------------------------------
 def logPrint(message):
    print datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), message
-   
+
 # -----------------------------------------------------------------------------
 # Simple options object (compatible with OptionParser)
 # -----------------------------------------------------------------------------
@@ -56,15 +56,15 @@ class Gmail():
      self.user = user
      self.pwd = password
      self.folder = ""
-     self.recipients = []  
-     self.message = ""      
+     self.recipients = []
+     self.message = ""
      self.files = []
 
    # --------------------------------------------------------------------------
    # Private utility methods
    # --------------------------------------------------------------------------
    def _createMessage(self, subject):
-     msg = MIMEMultipart()    
+     msg = MIMEMultipart()
      msg['Subject'] = subject
      msg['From'] = self.user
      msg['To'] = ",".join(self.recipients)
@@ -86,7 +86,7 @@ class Gmail():
      part.add_header('Content-Disposition', 'attachment; filename="%s"' % os.path.basename(filename))
      return part;
 
-   def _sendMessage(self, msg):    
+   def _sendMessage(self, msg):
      # Send the email to the SMTP server.
      smtp = smtplib.SMTP('smtp.gmail.com',587)
      smtp.ehlo()
@@ -128,6 +128,7 @@ class Gmail():
      options.world = True # set as default
      options.time = True # set as default
      options.distance = True # set as default
+     options.summary = False
      report = 0
      for emailid in items:
          logPrint("[GMAIL] Processing email id %s" % emailid)
@@ -169,6 +170,9 @@ class Gmail():
 
          if mail["Subject"].upper().find("[WORLD]") != -1:
            options.world = True
+
+         if mail["Subject"].upper().find("[SUMMARY]") != -1:
+           options.summary = True
 
          # If no special type requested, set to default
          if not report:
@@ -264,7 +268,7 @@ class Gmail():
    # Send email to recipients with attachments
    # --------------------------------------------------------------------------
    def send(self, recipients, files):
-     self.recipients = recipients      
+     self.recipients = recipients
      self.files = files
 
      for report in self.files:
@@ -328,7 +332,7 @@ if __name__ == '__main__':
     reports = processFiles(filelist, options)
 
     # Send emails with attachments
-    if recipients != "": 
+    if recipients != "":
         # default recipients
         print "Default recipients =",recipients
         mailto = mailto + [m.strip() for m in recipients.split(",")]
