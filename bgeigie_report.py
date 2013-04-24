@@ -1544,7 +1544,7 @@ def processFiles(fileList, options):
           continue
 
         if kmlEnabled:
-          attachments.append(generateKMLreport(logName, data, useZipExtension = True))
+          attachments.append(generateKMLreport(logName, data, useZipExtension = False))
         if gpxEnabled:
           attachments.append(generateGPXreport(logName, data, trackMode = False))
         if csvEnabled:
@@ -1589,7 +1589,7 @@ def processFiles(fileList, options):
           break
 
         if kmlEnabled:
-          attachments.append(generateKMLreport(logName, data, useZipExtension = True))
+          attachments.append(generateKMLreport(logName, data, useZipExtension = False))
         if gpxEnabled:
           attachments.append(generateGPXreport(logName, data, trackMode = False))
         if csvEnabled:
