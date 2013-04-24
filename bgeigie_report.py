@@ -1543,6 +1543,10 @@ def processFiles(fileList, options):
           print "No valid data available."
           continue
 
+        if summary:
+          # In summrary mode, don't generate separate reports
+          continue
+
         if kmlEnabled:
           attachments.append(generateKMLreport(logName, data, useZipExtension = False))
         if gpxEnabled:
