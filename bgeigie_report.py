@@ -436,9 +436,8 @@ def loadLogFile(filename, enableuSv, worldMode, ignoreDelay, ignoreDistance, tag
   # Connect to database
   if dbSupport:
     connection = pymongo.Connection()
-    db = connection.test
+    db = connection.databot
     locations = db.locations
-    locations.ensure_index('date', unique=True)
 
   for line in lines:
     # Extract items (comma separated)
@@ -614,7 +613,7 @@ def loadDbData(model, enableuSv, logs):
 
   # db connection
   connection = pymongo.Connection()
-  db = connection.test
+  db = connection.databot
   locations = db.locations
   cursors = locations.find({'$or' : logs})
 
@@ -1516,6 +1515,11 @@ def processFiles(fileList, options):
 
     tag = str(strftime("%Y-%m-%dT%H:%M:%SZ", gmtime()))
     logs = []
+
+    # Clean database
+    connection = pymongo.Connection()
+    connection.drop_database("databot")
+    connection.disconnect()
 
     # Split drives if necessary
     newFiles = []
