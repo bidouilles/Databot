@@ -95,6 +95,8 @@ maxDistanceBetweenReadings = 200*binSize # 20 km is suspect
 debugMode = False
 maxDataColumns = 15 # only process the 15 first columns from CSV
 
+gridSizeCropW = -15
+gridSizeCropH = -15
 
 # Globals
 global logfile
@@ -687,6 +689,63 @@ def rectangularBinNumpy(x_min,y_min,x_max,y_max, data, xbins,ybins=None):
     extent = (x_min,x_max,y_min,y_max)
     return hist, mask, extent, centers
 
+def rectangularBinFloat(x_min,y_min,x_max,y_max, data, xbins,ybins=None):
+    if (ybins == None): ybins = xbins
+    xdata, ydata, cpm = zip(*data)
+
+    print "x and y bins =", xbins,ybins
+
+    # Get min, max and width of dataset
+    xwidth = max(0.01, x_max-x_min)
+    ywidth = max(0.01, y_max-y_min)
+    xSize = float(xwidth/xbins)
+    ySize = float(ywidth/ybins)
+
+    # Bins
+    binsLon = np.array([float(x_min+x*xSize) for x in range( int(xwidth/xSize)+1)])
+    dLon = np.digitize(xdata, binsLon)
+    binsLat = np.array([float(y_min+y*ySize) for y in range( int(ywidth/ySize)+1)])
+    dLat = np.digitize(ydata, binsLat)
+
+    print binsLon, len(binsLon)
+    print binsLat, len(binsLat)
+
+    def centerbin(x,y):
+      # Compute bin center position for labels
+      cx = x_min+float(x*xSize+xSize/2)
+      cy = y_min+float(y*ySize+ySize/2)
+      return (cx,cy)
+
+    # Initialize dictionaries
+    hist = [[0.0 for x in xrange(xbins)] for y in xrange(ybins)]
+    mask = [[1 for x in xrange(xbins)] for y in xrange(ybins)]
+    avg = [[0.0 for x in xrange(xbins)] for y in xrange(ybins)]
+    centers = [[centerbin(x,y) for x in xrange(xbins)] for y in xrange(ybins)]
+
+    print "binning =",xbins, ybins
+
+    # Compute histogram
+    for i in range(len(data)):
+      x,y,c = data[i]
+      xb = dLon[i] - 1
+      yb = ybins - dLat[i]
+
+      if xb>=xbins: xb = xbins-1
+      if yb>=ybins: yb = ybins-1
+
+      hist[yb][xb] += 1 # count per rectangles
+      avg[yb][xb] += c  # total value per rectangles
+
+    # Compute average and mask
+    for xb in xrange(xbins):
+      for yb in xrange(ybins):
+        if hist[yb][xb] > 0.0:
+          mask[yb][xb] = 0 # mask out
+          hist[yb][xb] = (float(avg[yb][xb])/float(hist[yb][xb])) # average
+
+    extent = (x_min,x_max,y_min,y_max)
+    return hist, mask, extent, centers
+
 # -----------------------------------------------------------------------------
 # Hayakawa-san colormap
 # -----------------------------------------------------------------------------
@@ -882,6 +941,11 @@ def drawMap(mapName, data, language, showTitle):
     print "extended area %.3f km x %.3f km" % (width, height)
     #gridsize = (max(1,int(math.ceil(width/binSize)-borderSize*2)), max(1, int(math.ceil(height/binSize)-borderSize*2))) # 100m x 100m
     gridsize = (max(1,int(math.ceil(width/binSize))), max(1, int(math.ceil(height/binSize)))) # 100m x 100m
+
+    # Crop border for large area and small binSize 100m
+    if ((width >= 15) or (height >= 15)) and binSize == 0.1:
+      print "crop borders"
+      gridsize = (gridsize[0]+gridSizeCropW, gridsize[1]+gridSizeCropH) # 100m x 100m
 
     pngUrl = "http://parent.tile.openstreetmap.org/cgi-bin/export?bbox=%.6f,%.6f,%.6f,%.6f&scale=%d&format=png" % (lon_min, lat_min, lon_max, lat_max, max(width, height)*3000)
     svgUrl = "http://parent.tile.openstreetmap.org/cgi-bin/export?bbox=%.6f,%.6f,%.6f,%.6f&scale=%d&format=svg" % (lon_min, lat_min, lon_max, lat_max, max(width, height)*6000)
