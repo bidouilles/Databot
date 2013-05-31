@@ -140,6 +140,9 @@ class Gmail():
          if mail.get_content_maintype() != 'multipart':
            continue
 
+         if mail["Subject"] == None:
+           mail["Subject"] = ""
+
          logPrint("[GMAIL] ["+mail["From"]+"] :" + mail["Subject"])
 
          # Check subject for any requests
