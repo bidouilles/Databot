@@ -369,6 +369,8 @@ if __name__ == '__main__':
   print '='*80
   sheet = GoogleConfig(user, password, dockey, sheetname)
   gconfig = sheet.fetch()
+  recipients += gconfig["recipients"]
+  blacklist += gconfig["blacklist"]
   print '='*80
 
   # Start processing emails
