@@ -3,8 +3,5 @@ user=user1234@gmail.com
 password=unknown1234
 recipients=
 blacklist=
-[upload]
-apikey=JpwWxHmshV8xFDKei6Q3
-details=Koriyama 1st Measurement
-credits=JP
-location=Koriyama
+dockey=0Ag8Z8O-yL-hHdHJtbktOanBNQnE1al9lbnV2TDhSdEE
+sheetname=databot

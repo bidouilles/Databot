@@ -28,6 +28,9 @@ from email import Encoders
 # zip file support
 import zipfile
 
+# Google sheets
+import gspread
+
 # -----------------------------------------------------------------------------
 # Definitions
 # -----------------------------------------------------------------------------
@@ -100,7 +103,7 @@ class Gmail():
    # --------------------------------------------------------------------------
    # Fetch unseen emails attachment
    # --------------------------------------------------------------------------
-   def fetch(self, folder, blacklist):
+   def fetch(self, folder, blacklist, postfix = ""):
      self.folder = folder
 
      if not os.path.exists("%s" % (self.folder)):
@@ -143,6 +146,9 @@ class Gmail():
 
          if mail["Subject"] == None:
            mail["Subject"] = ""
+
+         # Add extra options to subject
+         mail["Subject"] += postfix
 
          logPrint("[GMAIL] ["+mail["From"]+"] :" + mail["Subject"])
 
@@ -309,6 +315,39 @@ class Gmail():
          continue
 
 # -----------------------------------------------------------------------------
+# Google Doc class for fetching configuration
+# -----------------------------------------------------------------------------
+class GoogleConfig():
+  def __init__(self, user, password, dockey, sheetname):
+    self.dockey = dockey
+    self.user = user
+    self.password = password
+    self.dockey = dockey
+    self.sheetname = sheetname
+
+  def fetch(self):
+    logPrint("[GDOCS] Spreatsheet login [%s]" % self.user)
+    gc = gspread.login(self.user, self.password)
+    sht = gc.open_by_key(self.dockey)
+    worksheet = sht.worksheet(self.sheetname)
+    logPrint("[GDOCS] Retrieving data")
+    data = worksheet.get_all_values()
+
+    fields = data[0]
+    for row in data[-1:]:
+      # Zip together the field names and values
+      items = zip(fields, row)
+
+      # Add the value to our dictionary
+      item = {}
+      for (name, value) in items:
+         item[name] = value.strip()
+
+      logPrint("[GDOCS] %s" % item)
+      return item
+
+
+# -----------------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -321,29 +360,29 @@ if __name__ == '__main__':
     password = config.get('gmail', 'password')
     recipients = config.get('gmail', 'recipients')
     blacklist = config.get('gmail', 'blacklist')
+    dockey = config.get('gmail', 'dockey')
+    sheetname = config.get('gmail', 'sheetname')
   else:
     logPrint("Configuration file is missing")
     sys.exit(0)
 
   print '='*80
+  sheet = GoogleConfig(user, password, dockey, sheetname)
+  gconfig = sheet.fetch()
+  print '='*80
 
   # Start processing emails
   gmail = Gmail(user, password)
-  result = gmail.fetch("logs", blacklist)
+  result = gmail.fetch("logs", blacklist, gconfig["options"])
 
   if (len(result)):
     mailto, filelist, options = result
 
     # Upload logs to api.safecast.org
-    if "upload" in config.sections():
-      apikey = config.get('upload', 'apikey')
-      details = config.get('upload', 'details')
-      credits = config.get('upload', 'credits')
-      location = config.get('upload', 'location')
-
-      api = SafecastAPI(apikey)
+    if gconfig["apikey"] != "":
+      api = SafecastAPI(gconfig["apikey"])
       for f in filelist:
-          api.setMetadata(os.path.basename(f), details, credits, location)
+          api.setMetadata(os.path.basename(f), gconfig["details"], gconfig["credits"], gconfig["cities"])
           api.upload(f)
 
     # Create email body
