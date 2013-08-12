@@ -44,7 +44,7 @@ def logPrint(message):
 class SafecastAPI:
     def __init__(self, apikey = "JpwWxHmshV8xFDKei6Q3"):
         self.apikey = apikey
-        logPrint("API Key = %s" % apikey)
+        logPrint("[SAFECASTAPI] API Key = %s" % apikey)
 
     def setMetadata(self, title, description, credits, cities, orientation = "Facing Back", height = 1):
         self.title = title
@@ -66,7 +66,7 @@ class SafecastAPI:
             "bgeigie_import[height]": self.height,
             })
 
-        logPrint("Uploading %s [name=%s, credits=%s]" % (filename, self.title, self.credits))
+        logPrint("[SAFECASTAPI] Uploading %s [name=%s, description=%s, credits=%s]" % (filename, self.title, self.description, self.credits))
         # Create the Request object
         request = urllib2.Request("http://api.safecast.org/bgeigie_imports.json?api_key=%s" % self.apikey, datagen, headers)
         # Actually do the request, and get the response
