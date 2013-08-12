@@ -15,6 +15,7 @@ import re
 
 # safecast module
 from bgeigie_report import processFiles
+from export_safecast import SafecastAPI
 
 # email modules
 import smtplib
@@ -332,6 +333,18 @@ if __name__ == '__main__':
 
   if (len(result)):
     mailto, filelist, options = result
+
+    # Upload logs to api.safecast.org
+    if "upload" in config.sections():
+      apikey = config.get('upload', 'apikey')
+      details = config.get('upload', 'details')
+      credits = config.get('upload', 'credits')
+      location = config.get('upload', 'location')
+
+      api = SafecastAPI(apikey)
+      for f in filelist:
+          api.setMetadata(os.path.basename(f), details, credits, location)
+          api.upload(f)
 
     # Create email body
     reports = processFiles(filelist, options)

@@ -3,3 +3,8 @@ user=user1234@gmail.com
 password=unknown1234
 recipients=
 blacklist=
+[upload]
+apikey=JpwWxHmshV8xFDKei6Q3
+details=Koriyama 1st Measurement
+credits=JP
+location=Koriyama
