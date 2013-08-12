@@ -58,11 +58,11 @@ class SafecastAPI:
         # From http://stackoverflow.com/questions/680305/using-multipartposthandler-to-post-form-data-with-python
         datagen, headers = multipart_encode({"bgeigie_import[source]": open(filename),
             "filename":os.path.basename(filename),
-            "bgeigie_import[name]": self.title,
-            "bgeigie_import[description]": self.description,
-            "bgeigie_import[credits]": self.credits,
-            "bgeigie_import[cities]": self.cities,
-            "bgeigie_import[orientation]": self.orientation,
+            "bgeigie_import[name]": "%s" % self.title,
+            "bgeigie_import[description]": "%s" % self.description,
+            "bgeigie_import[credits]": "%s" % self.credits,
+            "bgeigie_import[cities]": "%s" % self.cities,
+            "bgeigie_import[orientation]": "%s" % self.orientation,
             "bgeigie_import[height]": self.height,
             })
 
