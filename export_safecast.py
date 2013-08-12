@@ -56,8 +56,8 @@ class SafecastAPI:
 
     def upload(self, filename):
         # From http://stackoverflow.com/questions/680305/using-multipartposthandler-to-post-form-data-with-python
-        datagen, headers = multipart_encode({"bgeigie_import[source]": open(filename),
-            "filename":os.path.basename(filename),
+        datagen, headers = multipart_encode({
+            "bgeigie_import[source]": open(filename),
             "bgeigie_import[name]": "%s" % self.title,
             "bgeigie_import[description]": "%s" % self.description,
             "bgeigie_import[credits]": "%s" % self.credits,
@@ -67,10 +67,17 @@ class SafecastAPI:
             })
 
         logPrint("[SAFECASTAPI] Uploading %s [name=%s, description=%s, credits=%s]" % (filename, self.title, self.description, self.credits))
-        # Create the Request object
-        request = urllib2.Request("http://api.safecast.org/bgeigie_imports.json?api_key=%s" % self.apikey, datagen, headers)
-        # Actually do the request, and get the response
-        print urllib2.urlopen(request).read()
+
+        try:
+            # Create the Request object
+            request = urllib2.Request("http://api.safecast.org/bgeigie_imports.json?api_key=%s" % self.apikey, datagen, headers)
+            # Actually do the request, and get the response
+            print urllib2.urlopen(request).read()
+        except:
+            logPrint("[SAFECASTAPI] Upload failed:")
+            logPrint('-'*60)
+            traceback.print_exc(file=sys.stdout)
+            logPrint('-'*60)
 
 # -----------------------------------------------------------------------------
 # Main
