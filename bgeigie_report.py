@@ -45,6 +45,7 @@ from PIL import Image, ImageDraw
 import urllib
 
 # Mongodb
+global dbSupport
 try:
   import pymongo
   from collections import OrderedDict
@@ -404,6 +405,7 @@ def splitLogFile(filename, timeSplit, distanceSplit, worldMode, ignoreDelay, ign
 def loadLogFile(filename, enableuSv, worldMode, ignoreDelay, ignoreDistance, tag):
   # bGeigie Log format
   # header + id + time + cpm + cp5s + totc + rnStatus + latitude + northsouthindicator + longitude + eastwestindicator + altitude + gpsStatus + dop + quality
+  global dbSupport
 
   resultDriveId = []
   resultDate = []
@@ -429,17 +431,21 @@ def loadLogFile(filename, enableuSv, worldMode, ignoreDelay, ignoreDistance, tag
   blastlat = 0
   blastalt = 0
 
-  skippedLines = {"U": [], "T": [], "D": [], "O": []}
+  skippedLines = {"U": [], "H": [], "T": [], "D": [], "O": []}
   # U Unknown
+  # H Header issue
   # T Time issue
   # D Distance issue
   # O Out of Japan
 
   # Connect to database
   if dbSupport:
-    connection = pymongo.Connection()
-    db = connection.databot
-    locations = db.locations
+    try:
+      connection = pymongo.Connection()
+      db = connection.databot
+      locations = db.locations
+    except:
+      dbSupport = False
 
   for line in lines:
     # Extract items (comma separated)
@@ -458,7 +464,7 @@ def loadLogFile(filename, enableuSv, worldMode, ignoreDelay, ignoreDistance, tag
       if original != expected:
         print "WARNING: line %d wrong checksum 0x%02X, expected 0x%02X" % (lineCounter, original, expected)
     except:
-      skippedLines["U"].append(lineCounter)
+      skippedLines["H"].append(lineCounter)
       continue
 
     # Crop any extra columns
@@ -471,7 +477,7 @@ def loadLogFile(filename, enableuSv, worldMode, ignoreDelay, ignoreDistance, tag
          elif data[0] == "$BGRDD": bgeigieModel = "bGeigieClassic"
          elif data[0] == "$BNRDD": bgeigieModel = "bGeigieNano"
       if len(data) != maxDataColumns or data[6] != "A" or data[12] != "A":
-         skippedLines["U"].append(lineCounter)
+         skippedLines["H"].append(lineCounter)
          continue
 
       # Unpack the data
@@ -481,7 +487,7 @@ def loadLogFile(filename, enableuSv, worldMode, ignoreDelay, ignoreDistance, tag
        s_altitude,s_gpsStatus,s_dop,s_quality) = data
     else:
       # Ignore invalid data
-      skippedLines["U"].append(lineCounter)
+      skippedLines["H"].append(lineCounter)
       continue
 
     # Extract serial number
@@ -611,7 +617,7 @@ def loadDbData(model, enableuSv, logs):
   resultLon = []
   resultAltitude = []
   totalDose = 0
-  skippedLines = {"U": [], "T": [], "D": [], "O": []}
+  skippedLines = {"U": [], "H": [], "T": [], "D": [], "O": []}
 
   # db connection
   connection = pymongo.Connection()
@@ -1199,10 +1205,11 @@ def generateHTMLReport(mapName, language, statisticTable, skipped, charset):
 """
     htmlMessage = htmlMessageHeader % getEncoding(charset)[1]
 
-    htmlMessage += "    <h1>%s</h1><table cellspacing='0'>" % sLabels["summary"][language]
-    for e in statisticTable:
-       htmlMessage += "<tr><th align='left'>%s</th><td>%s</td></tr>" % (e[0], e[1])
-    htmlMessage += "</table>"
+    if len(statisticTable) > 0:
+      htmlMessage += "    <h1>%s</h1><table cellspacing='0'>" % sLabels["summary"][language]
+      for e in statisticTable:
+         htmlMessage += "<tr><th align='left'>%s</th><td>%s</td></tr>" % (e[0], e[1])
+      htmlMessage += "</table>"
 
     issues = sum([[str(x)+y for x in skipped[y]] for y in skipped.keys()], [])
     if len(issues):
@@ -1577,13 +1584,19 @@ def processFiles(fileList, options):
           options.language, options.charset, options.pdf, options.kml,
           options.gpx, options.csv, options.world, options.time, options.distance, options.summary)
 
+    global dbSupport
+
     tag = str(strftime("%Y-%m-%dT%H:%M:%SZ", gmtime()))
     logs = []
 
     # Clean database
-    connection = pymongo.Connection()
-    connection.drop_database("databot")
-    connection.disconnect()
+    if dbSupport:
+      try:
+        connection = pymongo.Connection()
+        connection.drop_database("databot")
+        connection.disconnect()
+      except:
+        dbSupport = False
 
     # Split drives if necessary
     newFiles = []
@@ -1609,6 +1622,12 @@ def processFiles(fileList, options):
         data = loadLogFile(f, True, worldMode, ignoreDelay, ignoreDistance, tag)
         if not len(data[0]):
           print "No valid data available."
+
+          # Generate email report without attachments
+          skipped = data[7]
+          message = generateHTMLReport(logName, language, [], skipped, charset)
+          reports[f] = {"message": message, "attachments": []}
+          processStatus.append((logfile, sum([len(skipped[e]) for e in skipped.keys()])))
           continue
 
         if summary:
