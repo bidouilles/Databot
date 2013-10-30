@@ -41,7 +41,7 @@ DEG_TO_RAD = pi/180
 RAD_TO_DEG = 180/pi
 
 # Tiles support
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageChops
 import urllib
 
 # Mongodb
@@ -197,6 +197,18 @@ def trace( debug ):
        else:
          return aFunc
     return concreteDescriptor
+
+# -----------------------------------------------------------------------------
+# Trim picture with border color like (255,255,255,255)
+# -----------------------------------------------------------------------------
+def trim(im, border):
+    bg = Image.new(im.mode, im.size, border)
+    diff = ImageChops.difference(im, bg)
+    bbox = diff.getbbox()
+    if bbox:
+        return im.crop(bbox)
+    else:
+        return im
 
 # -----------------------------------------------------------------------------
 # Generate random name
@@ -1058,7 +1070,12 @@ def drawMap(mapName, data, language, showTitle):
 
     # Save png file
     print "save the map ..."
-    plt.savefig(mapName+".png", dpi = dpi, bbox_inches='tight') # pad_inches=0
+    try:
+       plt.savefig(mapName+".png", dpi = dpi, bbox_inches='tight') # pad_inches=0
+    except:
+       print "- keep margins !!!"
+       plt.savefig(mapName+".png", dpi = dpi)
+    trim(Image.open(mapName+".png"), (255,255,255,255)).save(mapName+".png") 
     Image.open(mapName+".png").save(mapName+".jpg",quality=70) # create a 70% quality jpeg
 
     # Cleanup resources
