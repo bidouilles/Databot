@@ -271,6 +271,18 @@ class Gmail():
 
          result = [mailto, filelist, options]
 
+         # Upload to Safecast API
+         if mail["Subject"].upper().find("[API ") != -1:
+           pattern = re.compile("([a-zA-Z0-9]+)")
+           position = mail["Subject"].upper().find("[API ") + 5
+           apikey = re.findall(pattern, mail["Subject"][position:])[0]
+
+           api = SafecastAPI(apikey)
+           for f in filelist:
+              logPrint("[GMAIL] Uploading " + f + " to Safecast API with api_key = " + apikey)
+              api.setMetadata(os.path.basename(f), "", re.findall(email_pattern, mail["From"]), "")
+              api.upload(f)
+
      logPrint("[GMAIL] Done.")
      return result
 
