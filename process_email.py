@@ -279,8 +279,7 @@ class Gmail():
 
            api = SafecastAPI(apikey)
            for f in filelist:
-              logPrint("[GMAIL] Uploading " + f + " to Safecast API with api_key = " + apikey)
-              api.setMetadata(os.path.basename(f), "", re.findall(email_pattern, mail["From"]), "")
+              api.setMetadata(os.path.basename(f), "", re.findall(email_pattern, mail["From"])[0], "")
               api.upload(f)
 
      logPrint("[GMAIL] Done.")
