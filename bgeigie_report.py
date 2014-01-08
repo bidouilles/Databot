@@ -1054,8 +1054,8 @@ def drawMap(mapName, data, language, showTitle):
     # Legend
     legend = sLabels["legend"][language] % (binSize*1000)
     divider = make_axes_locatable(plt.gca())
-    cax = divider.append_axes("bottom", size="5%", pad=0.05)
-    cbar = plt.colorbar(cax=cax, orientation="hozrizontal", format=u"%0.3f~\nµSv/h")
+    cax = divider.append_axes("bottom", .2, pad=0.05)
+    cbar = plt.colorbar(cax=cax, orientation="horizontal", format=u"%0.3f~\nµSv/h")
     if showTitle:
        cbar.set_label(statistics, fontsize=8)
     for tick in cbar.ax.xaxis.get_major_ticks():
@@ -1075,7 +1075,7 @@ def drawMap(mapName, data, language, showTitle):
     except:
        print "- keep margins !!!"
        plt.savefig(mapName+".png", dpi = dpi)
-    trim(Image.open(mapName+".png"), (255,255,255,255)).save(mapName+".png") 
+    trim(Image.open(mapName+".png"), (255,255,255,255)).save(mapName+".png")
     Image.open(mapName+".png").save(mapName+".jpg",quality=70) # create a 70% quality jpeg
 
     # Cleanup resources
