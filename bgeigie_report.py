@@ -41,7 +41,10 @@ DEG_TO_RAD = pi/180
 RAD_TO_DEG = 180/pi
 
 # Tiles support
-from PIL import Image, ImageDraw, ImageChops
+try:
+  from PIL import Image, ImageDraw, ImageChops
+except:
+  import Image, ImageDraw, ImageChops
 import urllib
 
 # Mongodb
@@ -414,7 +417,7 @@ def splitLogFile(filename, timeSplit, distanceSplit, worldMode, ignoreDelay, ign
 # Load bGeigie raw log file
 # -----------------------------------------------------------------------------
 @trace(debugMode)
-def loadLogFile(filename, enableuSv, worldMode, ignoreDelay, ignoreDistance, tag):
+def loadLogFile(filename, enableuSv, worldMode, ignoreDelay, ignoreDistance, tag, instantCPM):
   # bGeigie Log format
   # header + id + time + cpm + cp5s + totc + rnStatus + latitude + northsouthindicator + longitude + eastwestindicator + altitude + gpsStatus + dop + quality
   global dbSupport
@@ -520,7 +523,10 @@ def loadLogFile(filename, enableuSv, worldMode, ignoreDelay, ignoreDistance, tag
            continue
       dlasttime = dtime
 
-      bcpm = float(s_cpm)
+      if instantCPM:
+        bcpm = float(s_cp5s)*12
+      else:
+        bcpm = float(s_cpm)
       if enableuSv: bcpm /= CPMfactor
       totalDose += float(s_cp5s)
       baltitude = float(s_altitude)
@@ -909,6 +915,65 @@ def loadTiles(lat_min,lon_min,lat_max,lon_max, zoom):
 
     c = projection.corners(gx0 , gy0, gx1 , gy1, zoom)
     return filename, c
+
+def splitMapData(data, areaSize):
+  # Extract data log
+  did, dt, lat, lon, cpm, altitude, dose, skipped, model = data
+
+  # Original dataset size
+  owidth = distance_on_unit_sphere(lat.min(),lon.min(),lat.min(),lon.max())
+  oheight = distance_on_unit_sphere(lat.min(),lon.min(),lat.max(),lon.min())
+
+  splitMapDataResult = []
+
+  if ((owidth > areaSize) or (oheight > areaSize)):
+    nbpagewidth = int(owidth/areaSize)
+    nbpageheight = int(oheight/areaSize)
+    
+    latRange = (lat.max()-lat.min())/nbpageheight
+    lonRange = (lon.max()-lon.min())/nbpagewidth
+
+    lonArray = [lon.min()+i*lonRange for i in range(nbpagewidth)]
+    latArray = [lat.min()+i*latRange for i in range(nbpageheight)]
+
+    # print nbpagewidth, lonRange, lonArray
+    # print nbpageheight, latRange, latArray
+
+    tosplit = zip(did, dt, lat, lon, cpm, altitude)
+    skipped = {"U": [], "H": [], "T": [], "D": [], "O": []}
+     
+    for latStart in latArray:
+      for lonStart in lonArray:
+        # print latStart, lonStart, latStart+latRange, lonStart+lonRange
+
+        resultDriveId = []
+        resultDate = []
+        resultReading = []
+        resultLat = []
+        resultLon = []
+        resultAltitude = []
+
+        for (did, dt, lat, lon, cpm, altitude) in tosplit:
+          if (lat >= latStart) and (lat <= latStart+latRange) and (lon >= lonStart) and (lon <= lonStart+lonRange):
+            # Store the results
+            resultDriveId.append(did)
+            resultDate.append(dt)
+            resultReading.append(cpm)
+            resultLat.append(lat)
+            resultLon.append(lon)
+            resultAltitude.append(altitude)
+
+        resultLat = np.array(resultLat)
+        resultLon = np.array(resultLon)
+        resultReading = np.array(resultReading)
+        resultAltitude = np.array(resultAltitude)
+
+        print "Area", latStart, lonStart, len(resultLat)
+        if len(resultLat)>0:
+          splitMapDataResult.append((resultDriveId, resultDate, resultLat, resultLon, resultReading, resultAltitude, dose, skipped, model))
+
+    print "Number of area chunks =", len(splitMapDataResult)
+    return splitMapDataResult
 
 # -----------------------------------------------------------------------------
 # Draw final map (tile layer + rectangular binning 100mx100m layer)
@@ -1597,9 +1662,9 @@ def generateCSVreport(mapName, data):
 # -----------------------------------------------------------------------------
 @trace(debugMode)
 def processFiles(fileList, options):
-    language, charset, pdfEnabled, kmlEnabled, gpxEnabled, csvEnabled, worldMode, ignoreDelay, ignoreDistance, summary = (
-          options.language, options.charset, options.pdf, options.kml,
-          options.gpx, options.csv, options.world, options.time, options.distance, options.summary)
+    language, charset, pdfEnabled, kmlEnabled, instantCPMEnabled, gpxEnabled, csvEnabled, worldMode, ignoreDelay, ignoreDistance, summary, splitArea = (
+          options.language, options.charset, options.pdf, options.kml, options.instant,
+          options.gpx, options.csv, options.world, options.time, options.distance, options.summary, options.area)
 
     global dbSupport
 
@@ -1636,7 +1701,7 @@ def processFiles(fileList, options):
       message = ""
       try:
         # Load data log
-        data = loadLogFile(f, True, worldMode, ignoreDelay, ignoreDistance, tag)
+        data = loadLogFile(f, True, worldMode, ignoreDelay, ignoreDistance, tag, instantCPMEnabled)
         if not len(data[0]):
           print "No valid data available."
 
@@ -1668,6 +1733,24 @@ def processFiles(fileList, options):
         # Generate reports
         if pdfEnabled:
           attachments.append(generatePDFReport(logName, language, size, legend, statisticTable))
+
+        # Generate extra 5km x 5km pages to report
+        if splitArea:
+          chunks = splitMapData(data, 5.0)
+          chunkCounter = 1
+          for c in chunks:
+            chunkName = logName+"_p%02d" % chunkCounter
+            chunkCounter+=1
+            print "Processing %s" % chunkName
+            mapInfo = drawMap(chunkName, c, language, False)
+            if len(mapInfo) == 0:
+               # Wrong file, skip it
+               continue
+            size, legend, statisticTable, skipped = mapInfo
+
+            # Generate reports
+            if pdfEnabled:
+              attachments.append(generatePDFReport(chunkName, language, size, legend, statisticTable))
 
         message = generateHTMLReport(logName, language, statisticTable, skipped, charset)
         processStatus.append((f, sum([len(skipped[e]) for e in skipped.keys()])))
@@ -1747,6 +1830,9 @@ if __name__ == '__main__':
     parser.add_option("-k", "--kml",
                       action="store_true", dest="kml", default=False,
                       help="enable KML report")
+    parser.add_option("-i", "--instant",
+                      action="store_true", dest="instant", default=False,
+                      help="enable instant CPM")
     parser.add_option("-g", "--gpx",
                       action="store_true", dest="gpx", default=False,
                       help="enable GPX report")
@@ -1765,6 +1851,9 @@ if __name__ == '__main__':
     parser.add_option("-s", "--summary",
                       action="store_true", dest="summary", default=False,
                       help="generate a summary report")
+    parser.add_option("-a", "--area",
+                      action="store_true", dest="area", default=False,
+                      help="split area in multiple reports (5km x 5km max)")
 
     (options, args) = parser.parse_args()
 
