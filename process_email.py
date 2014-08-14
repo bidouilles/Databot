@@ -133,6 +133,7 @@ class Gmail():
      options.time = True # set as default
      options.distance = True # set as default
      options.summary = False
+     options.instant = False
      options.area = False
      report = 0
      for emailid in items:
