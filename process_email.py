@@ -133,6 +133,7 @@ class Gmail():
      options.time = True # set as default
      options.distance = True # set as default
      options.summary = False
+     options.area = False
      report = 0
      for emailid in items:
          logPrint("[GMAIL] Processing email id %s" % emailid)
@@ -183,6 +184,9 @@ class Gmail():
 
          if mail["Subject"].upper().find("[SUMMARY]") != -1:
            options.summary = True
+
+         if mail["Subject"].upper().find("[SPLIT]") != -1:
+           options.area = True
 
          # If no special type requested, set to default
          if not report:
