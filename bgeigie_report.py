@@ -972,8 +972,8 @@ def splitMapData(data, areaSize):
         if len(resultLat)>0:
           splitMapDataResult.append((resultDriveId, resultDate, resultLat, resultLon, resultReading, resultAltitude, dose, skipped, model))
 
-    print "Number of area chunks =", len(splitMapDataResult)
-    return splitMapDataResult
+  print "Number of area chunks =", len(splitMapDataResult)
+  return splitMapDataResult
 
 # -----------------------------------------------------------------------------
 # Draw final map (tile layer + rectangular binning 100mx100m layer)
@@ -1738,6 +1738,7 @@ def processFiles(fileList, options):
         if splitArea:
           chunks = splitMapData(data, 5.0)
           chunkCounter = 1
+          
           for c in chunks:
             chunkName = logName+"_p%02d" % chunkCounter
             chunkCounter+=1
