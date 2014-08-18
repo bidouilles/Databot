@@ -975,7 +975,7 @@ def splitMapData(data, areaSize):
   if (len(splitMapDataResult) == 1):
     # Once chunck can be ignored
     splitMapDataResult = []
-    
+
   print "Number of area chunks =", len(splitMapDataResult)
   return splitMapDataResult
 
@@ -1801,6 +1801,25 @@ def processFiles(fileList, options):
         # Generate reports
         if pdfEnabled:
           attachments.append(generatePDFReport(logName, language, size, legend, statisticTable))
+
+        # Generate extra 5km x 5km pages to report
+        if splitArea:
+          chunks = splitMapData(data, 5.0)
+          chunkCounter = 1
+
+          for c in chunks:
+            chunkName = logName+"_p%02d" % chunkCounter
+            chunkCounter+=1
+            print "Processing %s" % chunkName
+            mapInfo = drawMap(chunkName, c, language, False)
+            if len(mapInfo) == 0:
+               # Wrong file, skip it
+               continue
+            size, legend, statisticTable, skipped = mapInfo
+
+            # Generate reports
+            if pdfEnabled:
+              attachments.append(generatePDFReport(chunkName, language, size, legend, statisticTable))
 
         message = generateHTMLReport(logName, language, statisticTable, skipped, charset)
         processStatus.append((logfile, sum([len(skipped[e]) for e in skipped.keys()])))
