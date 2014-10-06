@@ -667,7 +667,7 @@ def loadDbData(model, enableuSv, logs):
 # from http://stackoverflow.com/questions/2275924/how-to-get-data-in-a-histogram-bin
 #      http://stackoverflow.com/questions/8805601/efficiently-create-2d-histograms-from-large-datasets
 @trace(debugMode)
-def rectangularBinNumpy(x_min,y_min,x_max,y_max, data, xbins,ybins=None):
+def rectangularBinNumpy(x_min,y_min,x_max,y_max, data, xbins,ybins=None,peak=False):
     if (ybins == None): ybins = xbins
     xdata, ydata, cpm = zip(*data)
 
@@ -700,15 +700,23 @@ def rectangularBinNumpy(x_min,y_min,x_max,y_max, data, xbins,ybins=None):
       x,y,c = data[i]
       xb = dLon[i] - 1
       yb = ybins - dLat[i]
-      hist[yb][xb] += 1 # count per rectangles
-      avg[yb][xb] += c  # total value per rectangles
+      if peak:
+        if c > avg[yb][xb]:
+          hist[yb][xb] = 1 # count per rectangles
+          avg[yb][xb] = c  # total value per rectangles
+      else:
+        hist[yb][xb] += 1 # count per rectangles
+        avg[yb][xb] += c  # total value per rectangles
 
     # Compute average and mask
     for xb in range(xbins):
       for yb in range(ybins):
         if hist[yb][xb] > 0.0:
           mask[yb][xb] = 0 # mask out
-          hist[yb][xb] = (float(avg[yb][xb])/float(hist[yb][xb])) # average
+          if peak:
+            hist[yb][xb] = float(avg[yb][xb])
+          else:
+            hist[yb][xb] = (float(avg[yb][xb])/float(hist[yb][xb])) # average
 
     extent = (x_min,x_max,y_min,y_max)
     return hist, mask, extent, centers
@@ -983,7 +991,7 @@ def splitMapData(data, areaSize):
 # Draw final map (tile layer + rectangular binning 100mx100m layer)
 # -----------------------------------------------------------------------------
 @trace(debugMode)
-def drawMap(mapName, data, language, showTitle):
+def drawMap(mapName, data, language, showTitle, peak=False):
     print "Generating %s.png ..." % mapName
 
     # Extract data log
@@ -1104,7 +1112,7 @@ def drawMap(mapName, data, language, showTitle):
     print "add binning layer ..."
     x_min,y_min = m(lon_min,lat_min)
     x_max,y_max = m(lon_max,lat_max)
-    imdata, mask, extent, centers = rectangularBinNumpy(x_min,y_min,x_max,y_max,zip(x,y,cpm), gridsize[0], gridsize[1])
+    imdata, mask, extent, centers = rectangularBinNumpy(x_min,y_min,x_max,y_max,zip(x,y,cpm), gridsize[0], gridsize[1], peak = peak)
     drive100m = np.ma.array(imdata, mask=mask)
     plt.imshow(drive100m, extent = extent, interpolation = 'nearest', cmap=cmap, norm=normCPM, alpha = 0.9)
 
@@ -1666,9 +1674,9 @@ def generateCSVreport(mapName, data):
 # -----------------------------------------------------------------------------
 @trace(debugMode)
 def processFiles(fileList, options):
-    language, charset, pdfEnabled, kmlEnabled, instantCPMEnabled, gpxEnabled, csvEnabled, worldMode, ignoreDelay, ignoreDistance, summary, splitArea = (
+    language, charset, pdfEnabled, kmlEnabled, instantCPMEnabled, gpxEnabled, csvEnabled, worldMode, ignoreDelay, ignoreDistance, summary, splitArea, peak = (
           options.language, options.charset, options.pdf, options.kml, options.instant,
-          options.gpx, options.csv, options.world, options.time, options.distance, options.summary, options.area)
+          options.gpx, options.csv, options.world, options.time, options.distance, options.summary, options.area, options.peak)
 
     global dbSupport
 
@@ -1728,7 +1736,7 @@ def processFiles(fileList, options):
           attachments.append(generateCSVreport(logName, data))
 
         # Draw map
-        mapInfo = drawMap(logName, data, language, False)
+        mapInfo = drawMap(logName, data, language, False, peak = peak)
         if len(mapInfo) == 0:
            # Wrong file, skip it
            continue
@@ -1747,7 +1755,7 @@ def processFiles(fileList, options):
             chunkName = logName+"_p%02d" % chunkCounter
             chunkCounter+=1
             print "Processing %s" % chunkName
-            mapInfo = drawMap(chunkName, c, language, False)
+            mapInfo = drawMap(chunkName, c, language, False, peak = peak)
             if len(mapInfo) == 0:
                # Wrong file, skip it
                continue
@@ -1792,7 +1800,7 @@ def processFiles(fileList, options):
           attachments.append(generateCSVreport(logName, data))
 
         # Draw map
-        mapInfo = drawMap(logName, data, language, False)
+        mapInfo = drawMap(logName, data, language, False, peak = peak)
         if len(mapInfo) == 0:
            # Wrong file, skip it
            break
@@ -1811,7 +1819,7 @@ def processFiles(fileList, options):
             chunkName = logName+"_p%02d" % chunkCounter
             chunkCounter+=1
             print "Processing %s" % chunkName
-            mapInfo = drawMap(chunkName, c, language, False)
+            mapInfo = drawMap(chunkName, c, language, False, peak = peak)
             if len(mapInfo) == 0:
                # Wrong file, skip it
                continue
@@ -1878,6 +1886,9 @@ if __name__ == '__main__':
     parser.add_option("-a", "--area",
                       action="store_true", dest="area", default=False,
                       help="split area in multiple reports (5km x 5km max)")
+    parser.add_option("-m", "--max",
+                      action="store_true", dest="peak", default=False,
+                      help="keep peak measurement per block")
 
     (options, args) = parser.parse_args()
 
