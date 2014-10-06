@@ -961,8 +961,28 @@ def splitMapData(data, areaSize):
         resultLon = []
         resultAltitude = []
 
+        firstPass = True # To add corners
+
         for (did, dt, lat, lon, cpm, altitude) in tosplit:
           if (lat >= latStart) and (lat <= latStart+latRange) and (lon >= lonStart) and (lon <= lonStart+lonRange):
+            if firstPass:
+              # add dummy corners
+              resultDriveId.append(did)
+              resultDate.append(dt)
+              resultReading.append(0)
+              resultLat.append(latStart)
+              resultLon.append(lonStart)
+              resultAltitude.append(0)
+
+              resultDriveId.append(did)
+              resultDate.append(dt)
+              resultReading.append(0)
+              resultLat.append(latStart+latRange)
+              resultLon.append(lonStart+lonRange)
+              resultAltitude.append(0)
+
+              firstPass = False
+
             # Store the results
             resultDriveId.append(did)
             resultDate.append(dt)
