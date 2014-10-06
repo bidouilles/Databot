@@ -135,6 +135,7 @@ class Gmail():
      options.summary = False
      options.instant = False
      options.area = False
+     options.peak = False
      report = 0
      for emailid in items:
          logPrint("[GMAIL] Processing email id %s" % emailid)
@@ -188,6 +189,14 @@ class Gmail():
 
          if mail["Subject"].upper().find("[SPLIT]") != -1:
            options.area = True
+
+         if mail["Subject"].upper().find("[PEAK60]") != -1:
+           options.instant = False
+           options.peak = True
+
+         if mail["Subject"].upper().find("[PEAK5]") != -1:
+           options.instant = True
+           options.peak = True
 
          # If no special type requested, set to default
          if not report:
